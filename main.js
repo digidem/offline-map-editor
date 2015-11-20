@@ -1,12 +1,21 @@
 var randombytes = require('randombytes')
 var xtend = require('xtend')
 var concat = require('concat-stream')
+var wsock = require('websocket-stream')
+var through = require('through2')
 
 var level = require('level-browserify')
 var db = level('whatever')
 var forkdb = require('forkdb')
 var fdb = forkdb(db, {
   store: require('idb-content-addressable-blob-store')()
+})
+
+fdb.on('create', function (hash) {
+  fdb.get(hash, function (err, meta) {
+    if (err) return console.error(err)
+    fdb.createReadStream(hash).pipe(concat(readNode(meta.key)))
+  })
 })
 
 var vdom = require('virtual-dom'), h = vdom.h
@@ -16,18 +25,18 @@ var loop = main({ nodes: [], ways: [] }, render, vdom)
 var root = document.querySelector('#content')
 root.replaceChild(loop.target, root.childNodes[0])
 
-window.fdb = fdb
-
 fdb.keys(function (err, keys) {
   if (err) return console.error(err)
-  keys.forEach(function (key) {
-    fdb.forks(key.key, function (err, heads) {
-      heads.forEach(function (head) {
-        fdb.createReadStream(head.hash).pipe(concat(readNode(key.key)))
-      })
+  keys.forEach(readKey)
+})
+
+function readKey (key) {
+  fdb.forks(key.key, function (err, heads) {
+    heads.forEach(function (head) {
+      fdb.createReadStream(head.hash).pipe(concat(readNode(key.key)))
     })
   })
-})
+}
 
 function readNode (key) {
   return function (body) {
@@ -40,6 +49,15 @@ function readNode (key) {
 
 function render (state) {
   return h('div', [
+    h('h1', 'replicate'),
+    h('form', { onsubmit: replicate }, [
+      h('input', {
+        type: 'text',
+        name: 'url',
+        placeholder: 'ws://host:port'
+      }),
+      h('button', { type: 'submit' }, 'replicate')
+    ]),
     h('h1', 'create'),
     h('form', { onsubmit: create }, [
       h('div', [
@@ -81,11 +99,13 @@ function render (state) {
       var meta = { key: id, prev: heads }
       var w = fdb.createWriteStream(meta, function (err, key) {
         if (err) return console.error(err)
-        loop.update(xtend(loop.state, {
-          nodes: loop.state.nodes.concat({ key: key, value: node })
-        }))
       })
       w.end(JSON.stringify(node))
     })
+  }
+  function replicate (ev) {
+    ev.preventDefault()
+    var stream = wsock(this.elements.url.value)
+    stream.pipe(fdb.replicate()).pipe(stream)
   }
 }

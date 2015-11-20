@@ -12,7 +12,9 @@
     "level-browserify": "^1.0.1",
     "main-loop": "^3.2.0",
     "randombytes": "^2.0.1",
+    "through2": "^2.0.0",
     "virtual-dom": "^2.1.1",
+    "websocket-stream": "^2.1.0",
     "xtend": "^4.0.1"
   }
 }
