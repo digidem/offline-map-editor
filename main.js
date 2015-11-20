@@ -1,10 +1,13 @@
 var randombytes = require('randombytes')
 var xtend = require('xtend')
+var concat = require('concat-stream')
 
 var level = require('level-browserify')
 var db = level('whatever')
 var forkdb = require('forkdb')
-var fdb = forkdb(db)
+var fdb = forkdb(db, {
+  store: require('idb-content-addressable-blob-store')()
+})
 
 var vdom = require('virtual-dom'), h = vdom.h
 var main = require('main-loop')
@@ -12,6 +15,28 @@ var loop = main({ nodes: [], ways: [] }, render, vdom)
 
 var root = document.querySelector('#content')
 root.replaceChild(loop.target, root.childNodes[0])
+
+window.fdb = fdb
+
+fdb.keys(function (err, keys) {
+  if (err) return console.error(err)
+  keys.forEach(function (key) {
+    fdb.forks(key.key, function (err, heads) {
+      heads.forEach(function (head) {
+        fdb.createReadStream(head.hash).pipe(concat(readNode(key.key)))
+      })
+    })
+  })
+})
+
+function readNode (key) {
+  return function (body) {
+    var node = JSON.parse(body)
+    loop.update(xtend(loop.state, {
+      nodes: loop.state.nodes.concat({ key: key, value: node })
+    }))
+  }
+}
 
 function render (state) {
   return h('div', [

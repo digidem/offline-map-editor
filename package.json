@@ -7,6 +7,7 @@
   "author": "",
   "license": "BSD",
   "dependencies": {
+    "concat-stream": "^1.5.1",
     "forkdb": "^9.2.1",
     "level-browserify": "^1.0.1",
     "main-loop": "^3.2.0",
